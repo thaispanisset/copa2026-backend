@@ -1,0 +1,65 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Team {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  groupLetter String
+  flagUrl     String?
+  createdAt   DateTime @default(now())
+
+  standing    GroupStanding?
+
+  // RELACIONAMENTOS: Um time pode jogar várias vezes como Time A ou Time B
+  matchesAsTeamA Match[] @relation("TeamA")
+  matchesAsTeamB Match[] @relation("TeamB")
+
+  @@map("teams")
+}
+
+model Match {
+  id               Int      @id @default(autoincrement())
+  teamAId          Int?     // Mudamos para opcional (Int?), pois no mata-mata o time começa vazio esperando a fase anterior acabar
+  teamBId          Int?     // Mudamos para opcional (Int?)
+  goalsA           Int?     
+  goalsB           Int?     
+  matchDate        DateTime 
+  phase            String   // 'GROUP', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'
+  status           String   
+
+  // NOVOS CAMPOS PARA O CHAVEAMENTO:
+  nextMatchId      Int?     // ID do jogo da próxima fase
+  nextMatchTeamPlace String?  // 'A' ou 'B' (indica se o vencedor vira o Time A ou B do próximo jogo)
+
+  // ... Seus relacionamentos teamA e teamB continuam aqui embaixo ...
+  teamA            Team?    @relation("TeamA", fields: [teamAId], references: [id])
+  teamB            Team?    @relation("TeamB", fields: [teamBId], references: [id])
+
+  @@map("matches")
+}
+
+model GroupStanding {
+  id           Int      @id @default(autoincrement())
+  teamId       Int      @unique                  // Um time só tem uma linha na classificação
+  groupLetter  String                            // 'A', 'B', etc. (facilita a busca por grupo)
+  points       Int      @default(0)              // Pontos acumulados
+  played       Int      @default(0)              // Jogos disputados
+  won          Int      @default(0)              // Vitórias
+  drawn        Int      @default(0)              // Empates
+  lost         Int      @default(0)              // Derrotas
+  goalsFor     Int      @default(0)              // Gols feitos (Pró)
+  goalsAgainst Int      @default(0)              // Gols sofridos (Contra)
+  goalsDifference Int   @default(0)              // Saldo de gols (For - Against)
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  // Relacionamento: Cada linha de classificação pertence a um único time
+  team         Team     @relation(fields: [teamId], references: [id])
+
+  @@map("group_standings")
+}
