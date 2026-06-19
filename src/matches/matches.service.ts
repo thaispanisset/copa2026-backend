@@ -193,7 +193,8 @@ export class MatchesService {
     }
   }
 
-  async generateKnockoutTree() {
+  async generateKnockoutTree(apenasEstrutura: boolean = false) {
+    // 1. Limpa apenas os jogos agendados para evitar duplicidade, sem apagar resultados reais
     await this.prisma.match.deleteMany({
       where: {
         phase: {
@@ -203,6 +204,7 @@ export class MatchesService {
       }
     });
 
+    // 2. Criamos a estrutura física (os esqueletos) das fases finais estáveis
     const finalMatch = await this.prisma.match.create({
       data: {
         phase: 'FINAL',
@@ -359,6 +361,33 @@ export class MatchesService {
       },
     });
 
+    // 🟢 ETAPA 2: POPULAR COM OS DADOS DA FASE ANTERIOR
+    // Se o parâmetro for 'true', ele cria os Dezesseis-avos vazios e encerra sem dar erro de classificação!
+    if (apenasEstrutura) {
+      await this.prisma.match.createMany({
+        data: [
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-06-28T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_1.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-06-28T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_1.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-06-29T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_2.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-06-29T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_2.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-06-30T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_3.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-06-30T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_3.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-01T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_4.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-01T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_4.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-02T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_5.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-02T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_5.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-03T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_6.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-03T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_6.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-04T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_7.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-04T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_7.id, nextMatchTeamPlace: 'B' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-05T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_8.id, nextMatchTeamPlace: 'A' },
+          { phase: 'ROUND_OF_32', matchDate: new Date('2026-07-05T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_8.id, nextMatchTeamPlace: 'B' }
+        ]
+      });
+      return { message: 'Estrutura vazia do mata-mata gerada com sucesso! Pronta para inserção.' };
+    }
+
+    // Caso contrário, executa a busca normal dos classificados do TiDB para popular
     const grupoA = await this.standingsService.getTopTwoFromGroup('A');
     const grupoB = await this.standingsService.getTopTwoFromGroup('B');
     const grupoC = await this.standingsService.getTopTwoFromGroup('C');
@@ -378,28 +407,23 @@ export class MatchesService {
 
     await this.prisma.match.createMany({
       data: [
-        { teamAId: grupoA.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-28T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_1.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoB.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-28T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_1.id, nextMatchTeamPlace: 'B' },
-        { teamAId: grupoC.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-29T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_2.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoD.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-29T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_2.id, nextMatchTeamPlace: 'B' },
-        { teamAId: grupoE.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-30T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_3.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoF.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-30T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_3.id, nextMatchTeamPlace: 'B' },
-        { teamAId: grupoG.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-01T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_4.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoH.first.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-01T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_4.id, nextMatchTeamPlace: 'B' },
+        { teamAId: grupoA.first.id, teamBId: grupoB.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-28T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_1.id, nextMatchTeamPlace: 'A' },
+        { teamAId: grupoC.first.id, teamBId: grupoD.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-28T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_1.id, nextMatchTeamPlace: 'B' },
+        { teamAId: grupoE.first.id, teamBId: grupoF.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-29T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_2.id, nextMatchTeamPlace: 'A' },
+        { teamAId: grupoG.first.id, teamBId: grupoH.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-29T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_2.id, nextMatchTeamPlace: 'B' },
+        { teamAId: grupoI.first.id, teamBId: grupoA.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-30T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_3.id, nextMatchTeamPlace: 'A' },
+        { teamAId: grupoJ.first.id, teamBId: grupoB.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-06-30T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_3.id, nextMatchTeamPlace: 'B' },
+        { teamAId: grupoK.first.id, teamBId: grupoC.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-01T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_4.id, nextMatchTeamPlace: 'A' },
+        { teamAId: grupoL.first.id, teamBId: grupoD.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-01T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_4.id, nextMatchTeamPlace: 'B' },
 
-        { teamAId: grupoI.first.id, teamBId: grupoA.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-02T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_5.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoJ.first.id, teamBId: grupoB.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-02T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_5.id, nextMatchTeamPlace: 'B' },
-        { teamAId: grupoK.first.id, teamBId: grupoC.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-03T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_6.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoL.first.id, teamBId: grupoD.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-03T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_6.id, nextMatchTeamPlace: 'B' },
-
-        { teamAId: grupoE.second.id, teamBId: grupoF.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-04T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_7.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoG.second.id, teamBId: grupoH.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-04T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_7.id, nextMatchTeamPlace: 'B' },
-        { teamAId: grupoI.second.id, teamBId: grupoJ.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-05T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_8.id, nextMatchTeamPlace: 'A' },
-        { teamAId: grupoK.second.id, teamBId: grupoL.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-05T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_8.id, nextMatchTeamPlace: 'B' }
+        { teamAId: grupoE.second.id, teamBId: grupoF.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-02T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_5.id, nextMatchTeamPlace: 'A' },
+        { teamAId: grupoG.second.id, teamBId: grupoH.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-02T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_5.id, nextMatchTeamPlace: 'B' },
+        { teamAId: grupoI.second.id, teamBId: grupoJ.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-03T18:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_6.id, nextMatchTeamPlace: 'A' },
+        { teamAId: grupoK.second.id, teamBId: grupoL.second.id, phase: 'ROUND_OF_32', matchDate: new Date('2026-07-03T21:00:00Z'), status: 'SCHEDULED', nextMatchId: r16_6.id, nextMatchTeamPlace: 'B' }
       ],
     });
 
-    return { message: 'A árvore do mata-mata foi construída do zero, limpando duplicados!' };
+    return { message: 'A árvore do mata-mata foi construída preenchendo todos os classificados!' };
   }
 
   async fillThirdPlaceSlots() {

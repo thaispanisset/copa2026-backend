@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, ParseIntPipe, Sse } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Patch, Param, ParseIntPipe, Sse } from '@nestjs/common';
 import { MatchesService } from './matches.service';
 import { Prisma } from '@prisma/client';
 import { DashboardUpdatesService } from '../dashboard-updates/dashboard-updates.service';
@@ -44,9 +44,11 @@ export class MatchesController {
     return this.matchesService.finishMatchesBulk(results);
   }
 
-  @Post('generate-brackets') 
-  async generateBrackets() {
-    return this.matchesService.generateKnockoutTree();
+  @Post('generate-brackets')
+  async generateBrackets(@Query('apenasEstrutura') apenasEstrutura: string) {
+    // Transforma a string da URL em um booleano verdadeiro/falso
+    const isPureStructure = apenasEstrutura === 'true';
+    return this.matchesService.generateKnockoutTree(isPureStructure);
   }
 
   @Post('fill-thirds')
@@ -58,4 +60,5 @@ export class MatchesController {
   streamDashboardStats(): Observable<any> {
     return this.updatesService.getUpdatesNotification();
   }
+
 }
