@@ -1,11 +1,16 @@
-import { Module } from '@nestjs/common';
-import { NotificationsController } from './notifications.controller';
+import { Module, forwardRef } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
-import { PrismaModule } from '../prisma/prisma.module'; // Ajuste o caminho do seu PrismaModule se necessário
+import { NotificationsController } from './notifications.controller';
+import { MatchesModule } from '../matches/matches.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule], // Importa o Prisma para o service conseguir consultar os jogos no banco
-  controllers: [NotificationsController], // Registra o Controller que criamos acima
-  providers: [NotificationsService], // Registra o Service com a inteligência das regras
+  imports: [
+    forwardRef(() => MatchesModule),
+    PrismaModule 
+  ],
+  controllers: [NotificationsController],
+  providers: [NotificationsService],
+  exports: [NotificationsService], // 🟢 CRUCIAL: Tem que estar aqui!
 })
 export class NotificationsModule {}

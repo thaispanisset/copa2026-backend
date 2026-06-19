@@ -1,12 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { StandingsService } from '../standings/standings.service';
 import { DashboardUpdatesService } from '../dashboard-updates/dashboard-updates.service';
+import { NotificationsService } from '../notifications/notifications.service'; // ajuste o caminho se necessário
 
 @Injectable()
+@Injectable()
 export class MatchesService {
-  constructor(private prisma: PrismaService, private standingsService: StandingsService, private updatesService: DashboardUpdatesService) {}
+  constructor(
+    private prisma: PrismaService, 
+    private standingsService: StandingsService, 
+    private updatesService: DashboardUpdatesService,
+    @Inject(forwardRef(() => NotificationsService)) // 🟢 ENVOLVA O SERVICE AQUI
+    private notificationsService: NotificationsService 
+  ) {}
 
   async create(data: Prisma.MatchUncheckedCreateInput) {
     if (data.teamAId === data.teamBId) {
@@ -111,8 +120,12 @@ export class MatchesService {
     const freshStats = await this.getDashboardStats();
     this.updatesService.sendUpdate(freshStats);
 
+    // 🟢 O SEGREDO DO PUSH AUTOMÁTICO:
+    // Logo após recalcular tudo, chama o service de notificação para disparar o Firebase!
+    await this.notificationsService.checkAndSendAutomaticPushes();
+
     return {
-      message: `${resultsArray.length} partidas atualizadas e tabelas de classificação recalculadas!`,
+      message: `${resultsArray.length} partidas atualizadas...`,
       affectedGroups: Array.from(groupsToRecalculate),
       knockoutTreeGenerated: treeGenerated
     };

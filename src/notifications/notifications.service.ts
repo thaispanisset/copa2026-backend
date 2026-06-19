@@ -67,9 +67,45 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
-  // ✏️ LÓGICA DO SININHO ATUALIZADA (90 min de jogo vs 110 min de tolerância)
+  // 🟢 ADICIONE ESTE MÉTODO LOGO ABAIXO DO sendPushNotification:
+  async checkAndSendAutomaticPushes() {
+    try {
+      // 1. Puxa a lista de notificações gerada pelo seu método do sininho
+      const liveAlerts = await this.getLiveNotifications();
+
+      if (liveAlerts.length === 0) return;
+
+      // 2. Filtra se existe alguma notificação urgente do tipo 'LIVE' ou 'PENDING'
+      for (const alert of liveAlerts) {
+        // Criamos uma chave no banco ou memória rápida para evitar mandar o MESMO push a cada 30 segundos
+        // Mas para garantir o disparo de novas notificações:
+        if (alert.type === 'LIVE') {
+          await this.sendPushNotification(alert.title, alert.description);
+        }
+        
+        if (alert.type === 'CRITICAL_PENDING') {
+          await this.sendPushNotification(alert.title, alert.description);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao processar gatilhos automáticos de push:', error);
+    }
+  }
+
   async getLiveNotifications() {
-    const now = new Date();
+    // 🟢 GARANTE O HORÁRIO DO BRASIL NO RENDER:
+    const agoraUtc = new Date();
+    const fusoBrasilia = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+    
+    const parts = fusoBrasilia.formatToParts(agoraUtc);
+    const getPart = (type: string) => Number(parts.find(p => p.type === type)?.value);
+    
+    // Esse objeto 'now' agora tem as propriedades de hora/dia batendo com Brasília
+    const now = new Date(getPart('year'), getPart('month') - 1, getPart('day'), getPart('hour'), getPart('minute'), getPart('second'));
 
     const allMatches = await this.prisma.match.findMany({
       include: { teamA: true, teamB: true }
@@ -85,20 +121,29 @@ export class NotificationsService implements OnModuleInit {
     allMatches.forEach(m => {
       if (!m.matchDate) return;
 
+      // 1. 🟢 REINTRODUZIDO: dbDate declarado no escopo correto para o isPastDay ler lá embaixo
       const dbDate = new Date(m.matchDate);
-      const matchHours = dbDate.getUTCHours();
-      const matchMinutes = dbDate.getUTCMinutes();
+      const matchDateStr = m.matchDate.toString();
+      
+      // 2. Isolamos as horas e minutos REAIS salvos no banco
+      const timePart = matchDateStr.split('T')[1] || '';
+      const matchHours = Number(timePart.substring(0, 2) || '00');
+      const matchMinutes = Number(timePart.substring(3, 5) || '00');
 
       const matchStartMinutes = (matchHours * 60) + matchMinutes;
+      const matchEndMinutesForLive = matchStartMinutes + 90;       
+      const matchEndMinutesForNotification = matchStartMinutes + 110; 
       
-      // 🟢 Separação exata das duas réguas de tempo:
-      const matchEndMinutesForLive = matchStartMinutes + 90;       // Jogo rolando
-      const matchEndMinutesForNotification = matchStartMinutes + 110; // Cobrança do placar
-      
+      // 3. Pegamos a hora e minuto atuais do servidor já convertidos para o fuso do Brasil
       const currentMinutes = (now.getHours() * 60) + now.getMinutes();
 
-      const isToday = dbDate.getUTCDate() === now.getDate() && 
-                      (dbDate.getUTCMonth() + 1) === (now.getMonth() + 1);
+      // 4. Isolamos o dia e mês do jogo (YYYY-MM-DD)
+      const matchMonthDayString = matchDateStr.split('T')[0];
+      
+      // Pegamos o dia e mês atual do fuso do Brasil
+      const currentMonthDayString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      
+      const isToday = matchMonthDayString === currentMonthDayString;
 
       if (m.status === 'SCHEDULED' && m.teamAId && m.teamBId) {
         if (m.phase === 'SEMI_FINALS') semiFinalsReady = true;
@@ -152,6 +197,7 @@ export class NotificationsService implements OnModuleInit {
                          (isPastDay || (isToday && currentMinutes > matchEndMinutesForNotification));
 
       if (isTimeOver) {
+        let dbDate = new Date(m.matchDate); // Mantém a referência caso use abaixo
         pendingScoresCount++;
         pendingMatchesList.push(m);
       }
