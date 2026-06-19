@@ -25,7 +25,6 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
-  // Seu método registerToken continua aqui igualzinho...
   async registerToken(username: string, deviceToken: string) {
     return this.prisma.deviceToken.upsert({
       where: { token: deviceToken },
@@ -37,7 +36,7 @@ export class NotificationsService implements OnModuleInit {
     });
   }
 
-  // 🟢 Método de envio atualizado para o padrão modular
+  // 🟢 Método de envio atualizado com o canal padrão de som/alerta do Android
   async sendPushNotification(title: string, body: string) {
     try {
       const devices = await this.prisma.deviceToken.findMany();
@@ -48,19 +47,19 @@ export class NotificationsService implements OnModuleInit {
         return;
       }
 
-      // 🟢 Usa o tipo correto importado do submódulo
       const message: MulticastMessage = {
         tokens: tokens,
         notification: { title, body },
         android: {
           notification: {
-            icon: 'stock_ticker_update',
-            color: '#7e57c2',
+            icon: 'ic_notification',
+            color: '#cea760',
+            channelId: 'default',
+            sound: 'default'
           },
         },
       };
 
-      // 🟢 Usa o getMessaging() modular em vez de admin.messaging()
       const response = await getMessaging().sendEachForMulticast(message);
       console.log(`🔔 Push enviado! Sucesso: ${response.successCount} | Falha: ${response.failureCount}`);
     } catch (error) {
@@ -68,10 +67,9 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
-  // ✏️ SUA LÓGICA ATUAL DO SININHO DO FRONT-END CONTINUA DAQUI PARA BAIXO IGUALZINHA:
+  // ✏️ LÓGICA DO SININHO ATUALIZADA (90 min de jogo vs 110 min de tolerância)
   async getLiveNotifications() {
     const now = new Date();
-    const nowTime = now.getTime();
 
     const allMatches = await this.prisma.match.findMany({
       include: { teamA: true, teamB: true }
@@ -92,7 +90,10 @@ export class NotificationsService implements OnModuleInit {
       const matchMinutes = dbDate.getUTCMinutes();
 
       const matchStartMinutes = (matchHours * 60) + matchMinutes;
-      const matchEndMinutes = matchStartMinutes + 120;
+      
+      // 🟢 Separação exata das duas réguas de tempo:
+      const matchEndMinutesForLive = matchStartMinutes + 90;       // Jogo rolando
+      const matchEndMinutesForNotification = matchStartMinutes + 110; // Cobrança do placar
       
       const currentMinutes = (now.getHours() * 60) + now.getMinutes();
 
@@ -104,6 +105,9 @@ export class NotificationsService implements OnModuleInit {
         if (m.phase === 'FINAL') finalReady = true;
       }
 
+      // ====================================================================
+      // ⏳ 1. PRE-MATCH (30 MINUTOS ANTES)
+      // ====================================================================
       if (m.status === 'SCHEDULED' && m.teamAId && m.teamBId && isToday) {
         const minutesUntilMatch = matchStartMinutes - currentMinutes;
         if (minutesUntilMatch > 0 && minutesUntilMatch <= 30) {
@@ -117,11 +121,14 @@ export class NotificationsService implements OnModuleInit {
         }
       }
 
+      // ====================================================================
+      // ⚽ 2. JOGO AO VIVO (BOLA ROLANDO - 90 MINUTOS)
+      // ====================================================================
       const isLiveNow = m.status !== 'FINISHED' && 
                         m.teamAId && m.teamBId && 
                         isToday && 
                         currentMinutes >= matchStartMinutes && 
-                        currentMinutes <= matchEndMinutes;
+                        currentMinutes <= matchEndMinutesForLive;
 
       if (isLiveNow) {
         notifications.push({
@@ -133,13 +140,16 @@ export class NotificationsService implements OnModuleInit {
         });
       }
 
+      // ====================================================================
+      // ✏️ 3. AGUARDANDO PLACAR (SÓ COBRA APÓS 110 MINUTOS)
+      // ====================================================================
       const isPastDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() > 
                         new Date(dbDate.getUTCFullYear(), dbDate.getUTCMonth(), dbDate.getUTCDate()).getTime();
 
       const isTimeOver = m.status === 'SCHEDULED' && 
                          m.teamAId !== null &&
                          (m.goalsA === null || m.goalsB === null) &&
-                         (isPastDay || (isToday && currentMinutes > matchEndMinutes));
+                         (isPastDay || (isToday && currentMinutes > matchEndMinutesForNotification));
 
       if (isTimeOver) {
         pendingScoresCount++;
@@ -161,7 +171,7 @@ export class NotificationsService implements OnModuleInit {
           type: 'PENDING',
           phase: m.phase,
           title: 'Inserir placar final ✏️',
-          description: `O tempo de ${m.teamA?.name} x ${m.teamB?.name} encerrou. Atualize o sistema.`,
+          description: `O tempo de ${m.teamA?.name} x ${m.teamB?.name} encerrou. Atualize a sua tabela.`,
           styleClass: 'bg-light text-secondary',
           icon: 'bi-pencil-square'
         });
