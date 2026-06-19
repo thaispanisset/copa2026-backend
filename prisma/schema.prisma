@@ -63,3 +63,10 @@ model GroupStanding {
 
   @@map("group_standings")
 }
+
+model DeviceToken {
+  id        Int      @id @default(autoincrement())
+  username  String   // Nome do usuário (ex: 'thauan', 'sogro')
+  token     String   @unique // O token FCM longo e único do aparelho
+  createdAt DateTime @default(now())
+}

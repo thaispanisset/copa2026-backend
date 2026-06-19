@@ -1,15 +1,74 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as admin from 'firebase-admin';
+import * as path from 'path';
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
 
+  // 🟢 Inicializa o Firebase Admin SDK assim que o back-end subir
+  onModuleInit() {
+    try {
+      const serviceAccountPath = path.resolve(process.cwd(), 'firebase-service-account.json');
+      
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccountPath),
+      });
+      console.log('🔥 Firebase Admin SDK inicializado e conectado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao inicializar o Firebase Admin SDK:', error);
+    }
+  }
+
+  // 🟢 1. Salva ou atualiza o Token FCM gerado pelos celulares no TiDB
+  async registerToken(username: string, deviceToken: string) {
+    return this.prisma.deviceToken.upsert({
+      where: { token: deviceToken },
+      update: { username },
+      create: {
+        username,
+        token: deviceToken,
+      },
+    });
+  }
+
+  // 🟢 2. Função para disparar a Notificação Push nativa para todos da família
+  async sendPushNotification(title: string, body: string) {
+    try {
+      // Puxa todos os tokens de celulares registrados no banco TiDB
+      const devices = await this.prisma.deviceToken.findMany();
+      const tokens = devices.map(d => d.token);
+
+      if (tokens.length === 0) {
+        console.log('⚠️ Nenhum dispositivo registrado no TiDB para receber push.');
+        return;
+      }
+
+      // Estrutura a mensagem no padrão que o Google entrega no Android
+      const message: admin.messaging.MulticastMessage = {
+        tokens: tokens,
+        notification: { title, body },
+        android: {
+          notification: {
+            icon: 'stock_ticker_update', // Puxa o ícone nativo
+            color: '#7e57c2', // Cor customizada de destaque
+          },
+        },
+      };
+
+      const response = await admin.messaging().sendEachForMulticast(message);
+      console.log(`🔔 Push enviado! Sucesso: ${response.successCount} | Falha: ${response.failureCount}`);
+    } catch (error) {
+      console.error('❌ Erro fatal ao disparar notificações push:', error);
+    }
+  }
+
+  // ✏️ SUA LÓGICA ATUAL DO SININHO DO FRONT-END CONTINUA DAQUI PARA BAIXO IGUALZINHA:
   async getLiveNotifications() {
     const now = new Date();
-    const nowTime = now.getTime(); // Timestamp absoluto de agora
+    const nowTime = now.getTime();
 
-    // Busca todos os jogos com os times inclusos
     const allMatches = await this.prisma.match.findMany({
       include: { teamA: true, teamB: true }
     });
@@ -21,38 +80,28 @@ export class NotificationsService {
     let semiFinalsReady = false;
     let finalReady = false;
 
-    const MATCH_DURATION_MS = 120 * 60 * 1000;
-
     allMatches.forEach(m => {
       if (!m.matchDate) return;
 
-      // 🟢 1. Captura o horário real do jogo ignorando fusos externos
       const dbDate = new Date(m.matchDate);
-      const matchHours = dbDate.getUTCHours(); // Pega a hora exata salva
-      const matchMinutes = dbDate.getUTCMinutes(); // Pega o minuto exato salvo
+      const matchHours = dbDate.getUTCHours();
+      const matchMinutes = dbDate.getUTCMinutes();
 
-      // Converte tudo para minutos totais do dia para matar o erro de fuso
       const matchStartMinutes = (matchHours * 60) + matchMinutes;
-      const matchEndMinutes = matchStartMinutes + 120; // Janela de 2h de jogo
+      const matchEndMinutes = matchStartMinutes + 120;
       
       const currentMinutes = (now.getHours() * 60) + now.getMinutes();
 
-      // Verifica se o jogo é estritamente hoje (Dia e Mês)
       const isToday = dbDate.getUTCDate() === now.getDate() && 
                       (dbDate.getUTCMonth() + 1) === (now.getMonth() + 1);
 
-      // Guarda se a fase atual possui confrontos reais definidos
       if (m.status === 'SCHEDULED' && m.teamAId && m.teamBId) {
         if (m.phase === 'SEMI_FINALS') semiFinalsReady = true;
         if (m.phase === 'FINAL') finalReady = true;
       }
 
-      // ====================================================================
-      // ⏳ 1. REGRA: PRE-MATCH (30 MINUTOS ANTES)
-      // ====================================================================
       if (m.status === 'SCHEDULED' && m.teamAId && m.teamBId && isToday) {
         const minutesUntilMatch = matchStartMinutes - currentMinutes;
-        
         if (minutesUntilMatch > 0 && minutesUntilMatch <= 30) {
           notifications.push({
             type: 'PRE_MATCH',
@@ -64,10 +113,6 @@ export class NotificationsService {
         }
       }
 
-      // ====================================================================
-      // ⚽ 2. REGRA: JOGO AO VIVO (BOLA ROLANDO AGORA)
-      // ====================================================================
-      // Só entra em "Ao Vivo" se for hoje e o relógio atual estiver estritamente dentro das 2h de jogo
       const isLiveNow = m.status !== 'FINISHED' && 
                         m.teamAId && m.teamBId && 
                         isToday && 
@@ -84,10 +129,6 @@ export class NotificationsService {
         });
       }
 
-      // ====================================================================
-      // ✏️ 3. REGRA: AGUARDANDO PLACAR (O JOGO REALMENTE ACABOU)
-      // ====================================================================
-      // Só pede placar se for hoje e as 2h de jogo já estouraram completamente, ou se for um dia passado
       const isPastDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() > 
                         new Date(dbDate.getUTCFullYear(), dbDate.getUTCMonth(), dbDate.getUTCDate()).getTime();
 
@@ -102,7 +143,6 @@ export class NotificationsService {
       }
     });
 
-    // 3. RENDERIZAÇÃO DOS PLACARES PENDENTES
     if (pendingScoresCount > 3) {
       notifications.push({
         type: 'CRITICAL_PENDING',
@@ -124,9 +164,6 @@ export class NotificationsService {
       });
     }
 
-    // ====================================================================
-    // 💥 4. REGRA: MONITORAMENTO DAS FASES CRÍTICAS (Apenas se os times existirem)
-    // ====================================================================
     if (finalReady) {
       notifications.push({
         type: 'PHASE_ALERT',
