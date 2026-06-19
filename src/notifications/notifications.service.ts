@@ -1,28 +1,31 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as admin from 'firebase-admin'; // Mantém para inicializar
-import { messaging } from 'firebase-admin'; // 🟢 IMPORTANTE: Importa o submódulo de mensageria separado
 import * as path from 'path';
+
+// 🟢 O SEGREDO: Importação direta e cirúrgica dos submódulos do Firebase
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getMessaging, MulticastMessage } from 'firebase-admin/messaging';
 
 @Injectable()
 export class NotificationsService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
 
-  // 🟢 Inicializa o Firebase Admin SDK assim que o back-end subir
   onModuleInit() {
     try {
       const serviceAccountPath = path.resolve(process.cwd(), 'firebase-service-account.json');
       
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccountPath),
+      // 🟢 Nova forma modular de inicializar
+      initializeApp({
+        credential: cert(serviceAccountPath),
       });
+      
       console.log('🔥 Firebase Admin SDK inicializado e conectado com sucesso!');
     } catch (error) {
       console.error('❌ Erro ao inicializar o Firebase Admin SDK:', error);
     }
   }
 
-  // 🟢 1. Salva ou atualiza o Token FCM gerado pelos celulares no TiDB
+  // Seu método registerToken continua aqui igualzinho...
   async registerToken(username: string, deviceToken: string) {
     return this.prisma.deviceToken.upsert({
       where: { token: deviceToken },
@@ -34,10 +37,9 @@ export class NotificationsService implements OnModuleInit {
     });
   }
 
-  // 🟢 2. Função para disparar a Notificação Push nativa para todos da família
+  // 🟢 Método de envio atualizado para o padrão modular
   async sendPushNotification(title: string, body: string) {
     try {
-      // Puxa todos os tokens de celulares registrados no banco TiDB
       const devices = await this.prisma.deviceToken.findMany();
       const tokens = devices.map(d => d.token);
 
@@ -46,8 +48,8 @@ export class NotificationsService implements OnModuleInit {
         return;
       }
 
-      // Estrutura a mensagem no padrão que o Google entrega no Android
-      const message: messaging.MulticastMessage = {
+      // 🟢 Usa o tipo correto importado do submódulo
+      const message: MulticastMessage = {
         tokens: tokens,
         notification: { title, body },
         android: {
@@ -58,7 +60,8 @@ export class NotificationsService implements OnModuleInit {
         },
       };
 
-      const response = await admin.messaging().sendEachForMulticast(message);
+      // 🟢 Usa o getMessaging() modular em vez de admin.messaging()
+      const response = await getMessaging().sendEachForMulticast(message);
       console.log(`🔔 Push enviado! Sucesso: ${response.successCount} | Falha: ${response.failureCount}`);
     } catch (error) {
       console.error('❌ Erro fatal ao disparar notificações push:', error);

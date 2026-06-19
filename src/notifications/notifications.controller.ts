@@ -11,11 +11,19 @@ export class NotificationsController {
     return this.notificationsService.getLiveNotifications();
   }
 
-  // 🟢 NOVA ROTA: Recebe e registra o Token FCM do celular na tabela do TiDB
   @Post('register-token')
   async registerToken(
     @Body() body: { username: string; deviceToken: string }
   ) {
     return this.notificationsService.registerToken(body.username, body.deviceToken);
+  }
+
+  @Get('teste-push')
+  async enviarNotificacaoTeste() {
+    await this.notificationsService.sendPushNotification(
+      '⚽ COPA 2026 - TESTE NATIVO!',
+      'Deu certo! Se você está lendo isso, o push do Firebase funcionou direto do PC. 🔥'
+    );
+    return { message: 'Disparo de teste efetuado! Olhe o celular e o terminal.' };
   }
 }
