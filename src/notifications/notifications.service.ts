@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as admin from 'firebase-admin';
+import * as admin from 'firebase-admin'; // Mantém para inicializar
+import { messaging } from 'firebase-admin'; // 🟢 IMPORTANTE: Importa o submódulo de mensageria separado
 import * as path from 'path';
 
 @Injectable()
@@ -46,13 +47,13 @@ export class NotificationsService implements OnModuleInit {
       }
 
       // Estrutura a mensagem no padrão que o Google entrega no Android
-      const message: admin.messaging.MulticastMessage = {
+      const message: messaging.MulticastMessage = {
         tokens: tokens,
         notification: { title, body },
         android: {
           notification: {
-            icon: 'stock_ticker_update', // Puxa o ícone nativo
-            color: '#7e57c2', // Cor customizada de destaque
+            icon: 'stock_ticker_update',
+            color: '#7e57c2',
           },
         },
       };
